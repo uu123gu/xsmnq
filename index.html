@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>作家模拟器 V9.6.1 (移动端完美修复版)</title>
+    <title>作家模拟器 V9.8 (彩票伴侣代刮 & 食物扩充版)</title>
     <style>
         :root {
             --primary: #4a90e2;
@@ -276,6 +276,15 @@
             <!-- 呼出商店与地图的按钮 -->
             <button class="btn-open-shop" onclick="openShopModal()">🛒 前往道具商店</button>
             <button class="btn-open-shop" style="background: #27ae60; margin-top: 10px;" onclick="openMapModal()">🗺️ 打开城市地图</button>
+            <button class="btn-open-shop" style="background: #e67e22; margin-top: 10px;" onclick="openInventoryModal()">🎒 打开我的背包</button>
+
+            <!-- 存档管理模块 -->
+            <div style="margin-top: 20px; border-top: 2px dashed #ccc; padding-top: 15px;">
+                <h4 style="text-align: center; color: #555; margin-bottom: 10px;">系统管理</h4>
+                <button class="btn" style="width:100%; background:#2c3e50; margin-bottom:10px;" onclick="saveGame()">💾 保存游戏进度</button>
+                <button class="btn" style="width:100%; background:#7f8c8d; margin-bottom:10px;" onclick="loadGame()">📂 读取本地存档</button>
+                <button class="btn" style="width:100%; background:#c0392b;" onclick="clearSave()">🗑️ 清除游戏存档</button>
+            </div>
         </div>
 
         <!-- 中央操作区 -->
@@ -377,7 +386,7 @@
 
     <!-- 日志输出 -->
     <div class="log-panel" id="log-panel">
-        <div class="log-entry log-sys">欢迎来到作家模拟器V9.6.1！手机端排版已彻底重构，现在你可以通过向下滑动页面来查看所有隐藏的打工卡片和行动面板啦！</div>
+        <div class="log-entry log-sys">欢迎来到作家模拟器V9.8！商店已上架大量新水果、食材与甜品！现在买彩票时，如果有伴侣还可以让伴侣代刮（有神秘中奖加成哦）！</div>
     </div>
     
     <!-- ❤️ 寻找伴侣模态框 -->
@@ -440,6 +449,22 @@
         </div>
     </div>
 
+    <!-- 🎒 新增：背包模态框 -->
+    <div class="modal-overlay" id="inventory-modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header" style="background:#e67e22;">
+                <span>🎒 我的道具背包</span>
+                <button class="close-btn" onclick="closeInventoryModal()">✖</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; color: #555;">这里存放着你和伴侣在商店买回来的各种书籍、保养品等特殊道具。点击“使用”即可发挥效果。</p>
+                <div class="inv-grid" id="items-inventory">
+                    <!-- 由JS渲染 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 🗺️ 地图模态框 -->
     <div class="modal-overlay" id="map-modal">
         <div class="modal-content" style="max-width: 550px;">
@@ -461,6 +486,12 @@
                 </div>
 
                 <h4 style="margin-bottom:10px; color:#2c3e50; border-left:4px solid #f39c12; padding-left:10px;">🎰 福利彩票站 (搏一搏单车变摩托)</h4>
+                <!-- 新增：彩票开奖人选择 -->
+                <div style="margin-bottom: 10px; font-size: 1rem; color: #333; background: #fff8e7; padding: 10px; border-radius: 6px; border: 1px dashed #f39c12;" id="lottery-opener-div">
+                    <strong>选择谁来刮奖：</strong><br>
+                    <label style="cursor:pointer; display:inline-block; margin-top:5px;"><input type="radio" name="lottery-opener" value="player" checked> 🙋 自己刮</label>
+                    <label style="cursor:pointer; display:none; margin-left:15px; margin-top:5px;" id="lottery-partner-label"><input type="radio" name="lottery-opener" value="partner"> 💑 让伴侣代刮</label>
+                </div>
                 <div style="display:flex; flex-direction:column; gap:10px;">
                     <button class="btn" style="padding:12px; font-size:1rem; background:#f1c40f; color:#333;" onclick="buyLottery(50, 10000)">刮刮乐 ￥50 (最高奖金1万，或神秘商品)</button>
                     <button class="btn" style="padding:12px; font-size:1rem; background:#e67e22;" onclick="buyLottery(500, 100000)">超级大乐透 ￥500 (最高奖金10万，或神秘商品)</button>
@@ -566,7 +597,7 @@
     // 指定折叠面板显示的顺序
     const statOrder = ['cleanliness', 'satiety', 'hydration', 'health', 'stress', 'bladder', 'appearance', 'intelligence', 'eq', 'social', 'voice', 'acting'];
 
-    const game = {
+    let game = {
         week: 1,
         money: 1000,
         stamina: 10,
@@ -616,7 +647,8 @@
         inventory: {
             foods: {},        
             drinks: {},       
-            ingredients: {}   
+            ingredients: {},
+            items: {}  // 新增：通用道具背包
         }
     };
 
@@ -635,7 +667,16 @@
         '草莓+面粉': { name: '草莓蛋糕', val: 130 },
         '牛奶+苹果': { name: '苹果奶昔', val: 100 },
         '大米+牛肉': { name: '红烧牛肉饭', val: 170 },
-        '苹果+西瓜': { name: '缤纷水果沙拉', val: 110 }
+        '苹果+西瓜': { name: '缤纷水果沙拉', val: 110 },
+        // 新增隐藏食谱
+        '大米+虾': { name: '海鲜炒饭', val: 140 },
+        '蘑菇+鸡肉': { name: '小鸡炖蘑菇', val: 150 },
+        '菠菜+面条': { name: '菠菜蔬菜面', val: 100 },
+        '牛奶+香蕉': { name: '香蕉牛奶', val: 110 },
+        '草莓+葡萄': { name: '鲜榨混合果汁', val: 120 },
+        '猪肉+蟹': { name: '蟹粉狮子头', val: 200 },
+        '牛奶+芒果': { name: '芒果西米露', val: 130 },
+        '桃子+苹果': { name: '蜜桃苹果沙拉', val: 115 }
     };
 
     // --- 分类商店数据 (扩充) ---
@@ -659,7 +700,16 @@
                 { name: '草莓', itemType: 'ingredient', price: 15, text: '新鲜水果' },
                 { name: '苹果', itemType: 'ingredient', price: 10, text: '新鲜水果' },
                 { name: '西瓜', itemType: 'ingredient', price: 18, text: '消暑水果' },
-                { name: '牛奶', itemType: 'ingredient', price: 8, text: '营养饮品' }
+                { name: '牛奶', itemType: 'ingredient', price: 8, text: '营养饮品' },
+                // 新增食材
+                { name: '葡萄', itemType: 'ingredient', price: 12, text: '新鲜水果' },
+                { name: '香蕉', itemType: 'ingredient', price: 8, text: '新鲜水果' },
+                { name: '桃子', itemType: 'ingredient', price: 14, text: '新鲜水果' },
+                { name: '芒果', itemType: 'ingredient', price: 16, text: '热带水果' },
+                { name: '菠菜', itemType: 'ingredient', price: 6, text: '健康绿色食材' },
+                { name: '蘑菇', itemType: 'ingredient', price: 8, text: '山珍鲜味' },
+                { name: '虾', itemType: 'ingredient', price: 25, text: '美味海鲜' },
+                { name: '蟹', itemType: 'ingredient', price: 40, text: '高级海鲜' }
             ]
         },
         {
@@ -674,7 +724,15 @@
                 { name: '精致马卡龙', itemType: 'food', effectValue: 50, price: 25, text: '饱腹 +50' },
                 { name: '黑森林蛋糕', itemType: 'food', effectValue: 80, price: 40, text: '饱腹 +80' },
                 { name: '冰鲜西瓜拼盘', itemType: 'food', effectValue: 70, price: 30, text: '饱腹 +70' },
-                { name: '星级自助大餐', effectStat: 'full_meal', price: 200, text: '饱腹与水分全满！立即生效' }
+                { name: '星级自助大餐', effectStat: 'full_meal', price: 200, text: '饱腹与水分全满！立即生效' },
+                // 新增饮品与甜品
+                { name: '珍珠奶茶', itemType: 'drink', effectValue: 120, price: 20, text: '水分 +120' },
+                { name: '拿铁咖啡', itemType: 'drink', effectValue: 80, price: 25, text: '水分 +80' },
+                { name: '冰淇淋', itemType: 'food', effectValue: 40, price: 15, text: '饱腹 +40' },
+                { name: '提拉米苏', itemType: 'food', effectValue: 90, price: 45, text: '饱腹 +90' },
+                { name: '手工巧克力', itemType: 'food', effectValue: 60, price: 30, text: '饱腹 +60' },
+                { name: '焦糖布丁', itemType: 'food', effectValue: 55, price: 20, text: '饱腹 +55' },
+                { name: '能量吸吸冻', itemType: 'food', effectValue: 30, price: 12, text: '饱腹 +30' }
             ]
         },
         {
@@ -774,6 +832,53 @@
         { name: '有声书录制', cost: 3, req: { voice: 250, acting: 150 }, pay: 1000, effect: () => { return "一口气录了20章小说，嗓子冒烟了。"; } }
     ];
 
+    // --- 存档功能 ---
+    function saveGame() {
+        if(game.isGameOver) return alert("游戏已结束，无法存档！");
+        localStorage.setItem('writer_sim_save', JSON.stringify(game));
+        log('💾 游戏进度已成功保存在本地浏览器中！', 'log-sys');
+        alert("保存成功！");
+    }
+
+    function loadGame(isAuto = false) {
+        let savedData = localStorage.getItem('writer_sim_save');
+        if (savedData) {
+            try {
+                let parsed = JSON.parse(savedData);
+                // 兼容老存档没有 items 的问题
+                if(!parsed.inventory.items) parsed.inventory.items = {};
+                game = parsed;
+                if (!isAuto) log('📂 成功读取本地存档！', 'log-sys');
+                
+                // 根据当前状态恢复UI
+                if (game.book.active) {
+                    document.getElementById('create-book-panel').style.display = 'none';
+                    document.getElementById('action-panel').style.display = 'flex';
+                } else {
+                    document.getElementById('create-book-panel').style.display = 'block';
+                    document.getElementById('action-panel').style.display = 'none';
+                }
+                
+                updateAllUI();
+                refreshJobsUI(false);
+                
+                if (!isAuto) alert("读取成功！");
+            } catch (e) {
+                console.error("存档解析失败", e);
+                if (!isAuto) alert("读取失败：存档数据已损坏！");
+            }
+        } else {
+            if (!isAuto) alert("没有找到任何本地存档！");
+        }
+    }
+
+    function clearSave() {
+        if(confirm("警告：确定要清除游戏存档吗？此操作无法撤销！")) {
+            localStorage.removeItem('writer_sim_save');
+            alert("存档已清除！");
+        }
+    }
+
     // --- 初始化与UI更新 ---
     function init() {
         renderStats();
@@ -785,6 +890,14 @@
         renderShopModalContent();
         document.getElementById('action-panel').style.display = 'none';
         updateHeader();
+        
+        // 游戏启动时自动尝试读取存档
+        if (localStorage.getItem('writer_sim_save')) {
+            let wantsLoad = confirm("检测到本地有之前的游戏存档，是否继续上次的进度？");
+            if(wantsLoad) {
+                loadGame(true);
+            }
+        }
     }
 
     function updateHeader() {
@@ -1019,18 +1132,10 @@
                     expenses.push(item);
                     totalExpense += item.price;
                     
-                    // 伴侣买的商品，增益或实体放入玩家口袋
+                    // 伴侣买的商品存入对应背包 (核心修改：原direct强制生效改为收纳)
                     let itemType = item.itemType || 'direct';
                     if (itemType === 'direct') {
-                        if (item.effectStat === 'stamina') {
-                            game.stamina = Math.min(game.maxStamina, game.stamina + item.effectValue);
-                        } else if (item.effectStat === 'full_meal') {
-                            changeStat('satiety', 200);
-                            changeStat('hydration', 200);
-                            changeStat('bladder', 50);
-                        } else {
-                            changeStat(item.effectStat, item.effectValue);
-                        }
+                        addToInv('items', item.name, item.effectValue, item.effectStat, item.text);
                     } else {
                         if (itemType === 'ingredient') addToInv('ingredients', item.name);
                         else if (itemType === 'food') addToInv('foods', item.name, item.effectValue);
@@ -1088,7 +1193,7 @@
                 <span class="receipt-item-price">+ ￥${income}</span>
             </div>
             <div class="receipt-line"></div>
-            <div style="font-size: 0.9rem; color: #555; margin-bottom: 10px;">购物支出明细 (已存入玩家账户)：</div>
+            <div style="font-size: 0.9rem; color: #555; margin-bottom: 10px;">购物支出明细 (已存入玩家背包)：</div>
         `;
         
         if (expenses.length > 0) {
@@ -1120,7 +1225,7 @@
         document.getElementById('receipt-paper-content').innerHTML = receiptHtml;
         document.getElementById('receipt-modal').style.display = 'flex';
 
-        log(`💰 【发薪日】伴侣【${game.partner.name}】完成了工作并上交了 ￥${finalMoney}！人才市场的职位已为你刷新。详细请查看小票。`, 'log-money');
+        log(`💰 【发薪日】伴侣【${game.partner.name}】完成了工作并上交了 ￥${finalMoney}！物品均已存入背包，人才市场职位已刷新。`, 'log-money');
 
         // 工作结束，重置伴侣状态
         game.partner.job = null;
@@ -1142,6 +1247,16 @@
         if (game.depression === 'mild') mStatus = '<span style="color:#e67e22;">当前心理状态：轻度抑郁症 😔</span>';
         if (game.depression === 'severe') mStatus = '<span style="color:#e74c3c;">当前心理状态：重度抑郁症 😭</span>';
         document.getElementById('mental-status').innerHTML = mStatus;
+
+        // 根据是否有伴侣显示代刮选项
+        if (game.partner.active) {
+            document.getElementById('lottery-partner-label').style.display = 'inline-block';
+            let icon = game.partner.gender === '男' ? '👨' : '👩';
+            document.getElementById('lottery-partner-label').innerHTML = `<input type="radio" name="lottery-opener" value="partner"> ${icon} 让伴侣【${game.partner.name}】代刮 (玄学加成)`;
+        } else {
+            document.getElementById('lottery-partner-label').style.display = 'none';
+            document.querySelector('input[name="lottery-opener"][value="player"]').checked = true;
+        }
 
         document.getElementById('map-modal').style.display = 'flex';
     }
@@ -1194,13 +1309,19 @@
     function buyLottery(cost, maxReward) {
         if (game.money < cost) return alert(`资金不足，买这张彩票需要 ￥${cost}！`);
         
+        let opener = document.querySelector('input[name="lottery-opener"]:checked').value;
+        let isPartner = (opener === 'partner' && game.partner.active);
+        let openerName = isPartner ? `伴侣【${game.partner.name}】` : '你';
+
         changeStat('money', -cost);
         let rand = Math.random();
         
+        if(isPartner) rand += 0.05; // 伴侣玄学加成5%中奖率
+
         if (rand < 0.4) {
             // 40% 谢谢惠顾
-            log(`🎰 花费 ￥${cost} 购买彩票，刮开一看：【谢谢惠顾】...血本无归！`, 'log-warn');
-            alert('谢谢惠顾！下次一定中！');
+            log(`🎰 花费 ￥${cost} 购买彩票，${openerName}刮开一看：【谢谢惠顾】...血本无归！`, 'log-warn');
+            alert(`${openerName}刮开了彩票：谢谢惠顾！下次一定中！`);
         } else if (rand < 0.8) {
             // 40% 获得金钱
             let rewardRatio = Math.pow(Math.random(), 3); // 偏向小数字
@@ -1209,8 +1330,8 @@
             if(actualReward > maxReward) actualReward = maxReward;
 
             changeStat('money', actualReward);
-            log(`🎰 花费 ￥${cost} 购买彩票，恭喜中奖！获得奖金 ￥${actualReward}！`, 'log-money');
-            alert(`恭喜中奖！获得奖金 ￥${actualReward}！`);
+            log(`🎰 花费 ￥${cost} 购买彩票，恭喜！${openerName}刮中了奖金 ￥${actualReward}！`, 'log-money');
+            alert(`恭喜！${openerName}刮中了奖金 ￥${actualReward}！`);
         } else {
             // 20% 获得随机物品
             let allItems = [];
@@ -1219,32 +1340,29 @@
             
             let itemType = randomItem.itemType || 'direct';
             if (itemType === 'direct') {
-                if (randomItem.effectStat === 'stamina') {
-                    game.stamina = Math.min(game.maxStamina, game.stamina + randomItem.effectValue);
-                } else if (randomItem.effectStat === 'full_meal') {
-                    changeStat('satiety', 200);
-                    changeStat('hydration', 200);
-                    changeStat('bladder', 50);
-                } else {
-                    changeStat(randomItem.effectStat, randomItem.effectValue);
-                }
-                log(`🎰 花费 ￥${cost} 购买彩票，意外抽中了实物奖励【${randomItem.name}】并已自动使用！`, 'log-sys');
-                alert(`抽中实物奖励：【${randomItem.name}】！已生效。`);
+                addToInv('items', randomItem.name, randomItem.effectValue, randomItem.effectStat, randomItem.text);
             } else {
                 if (itemType === 'ingredient') addToInv('ingredients', randomItem.name);
                 else if (itemType === 'food') addToInv('foods', randomItem.name, randomItem.effectValue);
                 else if (itemType === 'drink') addToInv('drinks', randomItem.name, randomItem.effectValue);
-                log(`🎰 花费 ￥${cost} 购买彩票，意外抽中了实物奖励【${randomItem.name}】，已放入储物柜！`, 'log-sys');
-                alert(`抽中实物奖励：【${randomItem.name}】！已存入对应背包。`);
             }
+            log(`🎰 花费 ￥${cost} 购买彩票，${openerName}意外抽中了实物奖励【${randomItem.name}】，已放入对应背包！`, 'log-sys');
+            alert(`${openerName}抽中实物奖励：【${randomItem.name}】！已存入对应背包。`);
         }
         
         updateAllUI();
     }
 
-    // --- 背包工具函数 ---
-    function addToInv(type, name, effectValue = 0) {
-        if (!game.inventory[type][name]) game.inventory[type][name] = { count: 0, effectVal: effectValue };
+    // --- 扩展工具函数 (支持对象描述存储) ---
+    function addToInv(type, name, effectValue = 0, effectStat = null, descText = '') {
+        if (!game.inventory[type][name]) {
+            game.inventory[type][name] = { 
+                count: 0, 
+                effectVal: effectValue,
+                effectStat: effectStat, // 仅用于 items
+                desc: descText          // 仅用于 items
+            };
+        }
         game.inventory[type][name].count++;
     }
     
@@ -1253,6 +1371,63 @@
             game.inventory[type][name].count--;
             if (game.inventory[type][name].count <= 0) delete game.inventory[type][name];
         }
+    }
+
+    // --- 背包模态框逻辑 (新增) ---
+    function openInventoryModal() {
+        renderInventory();
+        document.getElementById('inventory-modal').style.display = 'flex';
+    }
+
+    function closeInventoryModal() {
+        document.getElementById('inventory-modal').style.display = 'none';
+    }
+
+    function renderInventory() {
+        let inv = game.inventory.items;
+        let html = '';
+        let count = 0;
+        for (let name in inv) {
+            count++;
+            let item = inv[name];
+            let colorClass = item.effectStat === 'stress' ? 'negative' : 'success'; // 减压在shop里是绿色，因为是增益，我们统一用var(--success)展示
+            if (item.effectVal < 0) colorClass = 'success'; // 压力-是好事
+            
+            html += `<div class="inv-card" style="align-items:flex-start; text-align:left;">
+                <div style="width:100%; border-bottom: 1px dashed #eee; padding-bottom: 5px; margin-bottom: 5px;">
+                    <strong style="color:#2c3e50; font-size:1.05rem;">${name}</strong> <span style="float:right; color:#888;">x${item.count}</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--success); min-height: 25px; font-weight:bold;">${item.desc}</div>
+                <button class="btn" style="width:100%; margin-top:5px; background:#8e44ad;" onclick="useInventoryItem('${name}')">立即使用</button>
+            </div>`;
+        }
+        if (count === 0) html = '<p style="color:#999; font-size:0.9rem;">你的通用道具背包里空空如也。</p>';
+        document.getElementById('items-inventory').innerHTML = html;
+    }
+
+    function useInventoryItem(name) {
+        let item = game.inventory.items[name];
+        if (!item) return;
+
+        if (item.effectStat === 'stamina') {
+            if (game.stamina >= game.maxStamina) {
+                alert(`体力已经是满的，暂时不需要使用此物品！`);
+                return;
+            }
+            game.stamina = Math.min(game.maxStamina, game.stamina + item.effectVal);
+        } else if (item.effectStat === 'full_meal') {
+            changeStat('satiety', 200);
+            changeStat('hydration', 200);
+            changeStat('bladder', 50);
+        } else {
+            changeStat(item.effectStat, item.effectVal);
+        }
+
+        removeFromInv('items', name);
+        log(`🎒 从背包中拿出并使用了【${name}】，效果拔群！`, 'log-sys');
+        
+        updateAllUI();
+        renderInventory();
     }
 
     // --- 商店模态框逻辑 ---
@@ -1311,22 +1486,11 @@
 
         let itemType = item.itemType || 'direct';
 
+        // 核心修改：direct 物品全部丢入 items 背包，不再立刻使用
         if (itemType === 'direct') {
-            if (item.effectStat === 'stamina') {
-                if (game.stamina >= game.maxStamina) {
-                    alert(`体力已经是满的，暂时不需要购买此物品！`);
-                    return;
-                }
-                game.stamina = Math.min(game.maxStamina, game.stamina + item.effectValue);
-            } else if (item.effectStat === 'full_meal') {
-                changeStat('satiety', 200);
-                changeStat('hydration', 200);
-                changeStat('bladder', 50);
-            } else {
-                changeStat(item.effectStat, item.effectValue);
-            }
             changeStat('money', -item.price);
-            log(`🛒 购买并使用了【${item.name}】，${item.text}。`, 'log-sys');
+            addToInv('items', item.name, item.effectValue, item.effectStat, item.text);
+            log(`🛒 购买了【${item.name}】，已存入你的通用背包。`, 'log-sys');
             
         } else {
             changeStat('money', -item.price);
